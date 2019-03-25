@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<!--
+To change this license header, choose License Headers in Project Properties.
+To change this template file, choose Tools | Templates
+and open the template in the editor.
+-->
+<html>
+    <head>
+        <title>Shoot</title>
+        <link rel="stylesheet" type="text/css" href="css/style.css">
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body>
+        <div class="container_canvas">
+            <canvas id="canvas_game" width="" height="" tabindex="1"></canvas>
+        </div>
+        <p id="touch_move"></p>
+        <script type="text/javascript" src="js/Global_Value.js"></script>
+        <script type="text/javascript" src="js/Function.js"></script>
+        <script type="text/javascript" src="js/Player.js"></script>
+        <script type="text/javascript" src="js/Bullet.js"></script>
+        <script type="text/javascript" src="js/Enemy.js"></script>
+        <script type="text/javascript">
+            var _canvas = document.getElementById("canvas_game");
+            _canvas.focus();
+            
+            _canvas.setAttribute("width",WIDTH_WINDOW);
+            _canvas.setAttribute("height",HEIGHT_WINDOW);
+            //_canvas.style.width = WIDTH_WINDOW+"px";
+            //_canvas.style.height = HEIGHT_WINDOW+"px";
+
+            var _context = _canvas.getContext("2d");
+            var FPS = 30;
+            var TICKS = 1000/FPS;
+            var startTime;
+            var lastUpdateTime;
+            
+            var mouse_move = false;
+            var touch_move = false;
+            var coordinate_start = null;
+            var touch_move2 = false;
+     
+            var waveStartTimer;
+            var waveStartTimerDiff;
+            var waveNumber;
+            var waveStart;
+            var waveDelay = 2000;
+            
+            var player;
+            var arr_bullets;
+            var arr_enemies;
+            
+            /* event function area */
+            //PC event
+            function canvas_mousedown(e){
+                mouse_move = true;
+                coordinate_start = e;
+            }
+            
+            function canvas_mousemove(e){
+                if( mouse_move == true ){
+                    var x = e.pageX - _canvas.offsetLeft;
+                    var y = e.pageY - _canvas.offsetTop;
+                    player.rotate(x,y);
+                }
+            }
+            
+            function canvas_mouseup(e){
+                mouse_move = false;
+                if( coordinate_start.pageX == e.pageX && coordinate_start.pageY == e.pageY){
+                    player.setFiring(true);
+                }
+            }
+            
+            function canvas_mouseout(e){
+                 mouse_move = false;
+            }
+            
+              function canvas_keyDown(e){
+                e.preventDefault();
+                if(e.keyCode == 32 ){
+                    player.setFiring(true);
+                }
+                
+            }
+            function canvas_keyUp(e){
+                e.preventDefault();
+                  if(e.keyCode == 32 ){
+                    player.setFiring(false);
+                }
+            }
+             //End PC event
+            
+            //smart phoen event
+            function canvas_touchStart(e){
+                e.preventDefault();
+                touch_move = true;
+            }
+            function canvas_touchMove(e){
+                e.preventDefault();
+                var x = e.touches[0].pageX - _canvas.offsetLeft;
+                var y = e.touches[0].pageY - _canvas.offsetTop;
+                if( x < 0 || x > WIDTH_CANVAS || y < 0 || y> HEIGHT_CANVAS ){
+                    touch_move = false;
+                }
+                if(touch_move==true){                   
+                    player.rotate(x,y);
+                }
+                touch_move2 = true;
+            }
+            function canvas_touchEnd(e){
+                e.preventDefault();
+                touch_move = false;
+                if(touch_move2 == false){
+                    player.setFiring(true);
+                }
+                touch_move2 = false;               
+                
+            }
+            //End smart phoen event
+            /* End devent function area */
+            function gameLoop(){
+                 var diffTime = Date.now() - lastUpdateTime;
+                 var numOfUpdate = Math.floor(diffTime/TICKS);
+                 for(var i = 0; i< numOfUpdate;i++){
+                     update();
+                 }
+                 if(diffTime >= TICKS)
+                     draw();
+                 lastUpdateTime += TICKS*numOfUpdate;
+                 diffTime -= TICKS*numOfUpdate;
+                 var sleepTime = TICKS - diffTime;
+                 setTimeout(gameLoop, sleepTime);
+            }
+            
+            function clear(){
+                _context.clearRect( 0, 0, _canvas.width, _canvas.height);
+            }
+            
+            function init(){
+                WIDTH_CANVAS = _canvas.width;
+                HEIGHT_CANVAS = _canvas.height;
+                
+                player = new player();
+                arr_bullets = new Array();
+                arr_enemies = new Array();
+                
+                waveStartTimer = 0;
+                waveStartTimerDiff = 0;
+                waveStart = true;
+                waveNumber = 0;
+                
+                startTime = Date.now();
+                lastUpdateTime = startTime;
+                
+                /*
+                for(var i = 0; i < 4; i++){
+                    arr_enemies.push(new Enemy());
+                }
+                */
+                gameLoop();
+            }
+            
+            function update(){
+                //new wave
+                if(waveStartTimer == 0 && arr_enemies.length == 0){
+                    waveNumber++;
+                    waveStart = false;
+                    waveStartTimer = Date.now();
+                }else{
+                    waveStartTimerDiff = Date.now() - waveStartTimer;
+                    if(waveStartTimerDiff > waveDelay){
+                        waveStart = true;
+                        waveStartTimer = 0;
+                        waveStartTimerDiff = 0;
+                    }
+                }
+                
+                if( waveStart && arr_enemies.length == 0){
+                    createNewEnemies();
+                }
+                
+                //player update
+                player.update();
+                
+                //bullet update
+                for(var i = 0; i < arr_bullets.length ; i++){
+                    var remove = arr_bullets[i].update();
+                    if(remove){
+                        arr_bullets.splice(i, 1);
+                    }
+                }
+                
+                //enemy update
+                for(var i = 0; i < arr_enemies.length; i++){
+                    arr_enemies[i].update();
+                }
+                //bullet-enemy collision
+                for(var i = 0; i < arr_bullets.length ; i++){
+                    var b = arr_bullets[i];
+                    var bx = b.getX();
+                    var by = b.getY();
+                    var br = b.getRadius();
+                    for(var j = 0; j < arr_enemies.length; j++){
+                        var e = arr_enemies[j];
+                        var ex = e.getX();
+                        var ey = e.getY();
+                        var er = e.getRadius();
+                        
+                        var dx = bx - ex;
+                        var dy = by - ey;
+                        var distance = Math.sqrt( dx*dx + dy*dy);
+                        if(distance < br + er){
+                            e.hitBullet();
+                            arr_bullets.splice(i, 1);
+                            break;
+                        }
+                    }
+                }
+                
+                //check dead enemy
+                for(var i = 0; i < arr_enemies.length; i++){
+                    if(arr_enemies[i].isDead()){
+                         arr_enemies.splice(i, 1);
+                    }
+                }
+                
+            }
+            
+            function draw(){
+                //draw background
+                drawBackground(_context);
+                //draw player
+                player.draw(_context);
+                //draw bullet
+                for(var i = 0; i < arr_bullets.length ; i++)
+                    arr_bullets[i].draw( _context );
+                //draw enemies
+                for(var i = 0; i < arr_enemies.length; i++){
+                    arr_enemies[i].draw(_context);
+                }
+                
+            }
+            
+            function createNewEnemies(){
+                arr_enemies.slice(0, arr_enemies.length);
+                if(waveNumber == 1){
+                    for(var i = 0; i < 4; i++){
+                        arr_enemies.push(new Enemy(1,1));
+                    }
+                }
+                 if(waveNumber == 2){
+                    for(var i = 0; i < 4; i++){
+                        arr_enemies.push(new Enemy(1,1));
+                    }
+                    arr_enemies.push(new Enemy(1,2));
+                    arr_enemies.push(new Enemy(1,2));
+                }
+                 if(waveNumber == 3){
+                    for(var i = 0; i < 8; i++){
+                        arr_enemies.push(new Enemy(1,1));
+                    }
+                    arr_enemies.push(new Enemy(1,2));
+                    arr_enemies.push(new Enemy(1,2));
+                }
+                if(waveNumber == 4){
+                    for(var i = 0; i < 4; i++){
+                        arr_enemies.push(new Enemy(2,1));
+                    }
+                    arr_enemies.push(new Enemy(1,3));
+                    arr_enemies.push(new Enemy(1,4));
+                }
+                if(waveNumber == 5){
+                    arr_enemies.push(new Enemy(1,4));
+                    arr_enemies.push(new Enemy(1,3));
+                    arr_enemies.push(new Enemy(1,3));
+                }
+                if(waveNumber == 6){
+                    arr_enemies.push(new Enemy(1,3));
+                     for(var i = 0; i < 4; i++){
+                        arr_enemies.push(new Enemy(2,1));
+                        arr_enemies.push(new Enemy(3,1));
+                    }
+                }
+                if(waveNumber == 7){
+                    arr_enemies.push(new Enemy(1,3));
+                    arr_enemies.push(new Enemy(2,3));
+                    arr_enemies.push(new Enemy(3,3));
+                }
+                if(waveNumber == 8){
+                    arr_enemies.push(new Enemy(1,3));
+                    arr_enemies.push(new Enemy(2,4));
+                    arr_enemies.push(new Enemy(3,4));
+                }
+                
+            }
+            init();
+            
+            //canvas_pc
+            _canvas.onmousedown = canvas_mousedown;
+            _canvas.onmousemove = canvas_mousemove;
+            _canvas.onmouseup = canvas_mouseup;
+            _canvas.onmouseout = canvas_mouseout;
+            
+            _canvas.onkeydown = canvas_keyDown;
+            _canvas.onkeyup = canvas_keyUp;
+            //End canvas px
+            
+            //canvas smartphone
+            _canvas.addEventListener("touchstart", canvas_touchStart, false);
+            _canvas.addEventListener("touchmove", canvas_touchMove, false);
+            _canvas.addEventListener("touchend", canvas_touchEnd, false);
+            //end canvas smart phone
+            
+            
+        </script>
+    </body>
+</html>
